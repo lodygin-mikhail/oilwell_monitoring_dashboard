@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 12345678
+      POSTGRES_DB: my_db
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d my_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  data_loader:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./scripts:/app/scripts
+    command: >
+      sh -c "python scripts/data_load.py &&
+             python scripts/load_to_postgres.py"
+
+  metabase:
+    image: metabase/metabase:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: postgres
+      MB_DB_PORT: 5432
+      MB_DB_DBNAME: my_db
+      MB_DB_USER: admin
+      MB_DB_PASS: 12345678
+      # Настройки администратора
+      MB_SITE_NAME: "Oilfield Analytics"
+      MB_ADMIN_EMAIL: admin@example.com
+      MB_ADMIN_PASSWORD: metabase_adm1n
+      MB_SETUP_DONE: "true"
+      MB_QUERY_ROW_LIMIT: "5000"
+      MB_DB_FILE: /metabase-data/metabase.db
+    volumes:
+      - ./metabase-data:/metabase-data
+      - ./dashboards:/dashboards
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
